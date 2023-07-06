@@ -4,7 +4,7 @@
         "title": "Runs API",
         "version": "0.1.0",
         "description":
-        "CRUD API made as part of CTD Node/Express course"
+        "CTD Node/Express course - final project"
     },
     "servers": [
         {

@@ -2,6 +2,7 @@ const fetch = require("node-fetch");
 const { BadRequestError } = require("../errors");
 const Integration = require("../models/Integration");
 const PolarRun = require("../models/PolarRun");
+const { StatusCodes } = require("http-status-codes");
 
 const getProfile = async (req, res) => {
   const id = req.query.id;
@@ -11,23 +12,21 @@ const getProfile = async (req, res) => {
 
   const integration = await Integration.findOne({ userId: id });
   if (!integration) {
-    return res.status(204).end();
+    return res.status(StatusCodes.NO_CONTENT).end();
   }
 
-  res.status(200).json({ profile: integration.profile });
+  res.status(StatusCodes.OK).json({ profile: integration.profile });
 };
 
-// should use the auth middleware?
 const createProfile = async (req, res) => {
   const { userId } = req.body;
   const integration = await Integration.findOne({ userId: userId });
-  // should also check for the token's expiration date
   const token = integration.token.access_token;
 
   const profile = await registerUser(token, userId);
   integration.profile = profile;
   await Integration.findOneAndUpdate({ userId: userId }, integration);
-  res.status(200).send(profile);
+  res.status(StatusCodes.OK).send(profile);
 };
 
 const getAuthCode = async (req, res) => {
@@ -38,8 +37,7 @@ const getAuthCode = async (req, res) => {
   }
 
   const token = await getToken(code, userId);
-  // const user = await registerUser(token.access_token, req.user.userId);
-  res.status(200).json({ token });
+  res.status(StatusCodes.OK).json({ token });
 };
 
 const getToken = async (code, userId) => {
@@ -95,24 +93,28 @@ const syncAccount = async (req, res) => {
   const userIntegration = await Integration.findOne({ userId });
   if (!userIntegration) {
     res
-      .status(404)
+      .status(StatusCodes.NOT_FOUND)
       .send({ msg: `Could not find integration data for the user ${userId}` });
     return;
   }
   const token = userIntegration.token.access_token;
   const memberId = userIntegration.profile["polar-user-id"];
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+  };
 
   // start a transaction to check for available exercises
   const transactionsResponse = await fetch(
     `https://www.polaraccesslink.com/v3/users/${memberId}/exercise-transactions`,
     {
       method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      headers,
     }
   );
 
   if (transactionsResponse.status === 204) {
-    res.status(204).end();
+    res.status(StatusCodes.NO_CONTENT).end();
     return;
   }
   const transactions = await transactionsResponse.json();
@@ -123,7 +125,7 @@ const syncAccount = async (req, res) => {
     `https://www.polaraccesslink.com/v3/users/${memberId}/exercise-transactions/${transactionId}`,
     {
       method: "GET",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      headers,
     }
   );
 
@@ -138,15 +140,14 @@ const syncAccount = async (req, res) => {
   await Promise.all(requests);
 
   // commit the transaction once all the data was saved
-  const commitTransactionResponse = await fetch(
+  await fetch(
     `https://www.polaraccesslink.com/v3/users/${userId}/exercise-transactions/${transactionId}`,
     {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token}` },
     }
   );
 
-  res.status(200).end();
+  res.status(StatusCodes.OK).end();
 };
 
 function fetchAndSaveRuns(link, token, userId) {
