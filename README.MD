@@ -1,69 +1,24 @@
+#### Description
+
+API for the running viz app. Provides a CRUD for managing running data, and also integration with Polar watches, by using the Polar Accesslink API v3.
+
 #### Setup
 
+1. Install the necessary dependencies:
+
 ```bash
-npm install && npm start
+npm install
 ```
 
-#### Database Connection
+2. Setup a .env file in the project's root. Should contain the following:
 
-1. Import connect.js
-2. Invoke in start()
-3. Setup .env in the root
-4. Add MONGO_URI with correct value
+```
+MONGO_URI = *mongodb connection string*
+JWT_SECRET = *random string to hash the tokens*
+JWT_EXPIRATION = *token expiration period*
 
-#### Routers
-
-- auth.js
-- jobs.js
-
-#### User Model
-
-Email Validation Regex
-
-```regex
-/^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+POLAR_BASIC_AUTH = *polar basic authorization code*
+POLAR_CLIENT_ID = *polar client id*
 ```
 
-#### Register User
-
-- Validate - name, email, password - with Mongoose
-- Hash Password (with bcryptjs)
-- Save User
-- Generate Token
-- Send Response with Token
-
-#### Login User
-
-- Validate - email, password - in controller
-- If email or password is missing, throw BadRequestError
-- Find User
-- Compare Passwords
-- If no user or password does not match, throw UnauthenticatedError
-- If correct, generate Token
-- Send Response with Token
-
-#### Mongoose Errors
-
-- Validation Errors
-- Duplicate (Email)
-- Cast Error
-
-#### Security
-
-- helmet
-- cors
-- xss-clean
-- express-rate-limit
-
-Swagger UI
-
-```yaml
-/jobs/{id}:
-  parameters:
-    - in: path
-      name: id
-      schema:
-        type: string
-      required: true
-      description: the job id
-```
+To generate the credentials related to the Polar Accesslink API, it is necessary to first [create a Polar Flow Account](https://flow.polar.com/register).
