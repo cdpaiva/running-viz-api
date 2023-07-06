@@ -1,10 +1,15 @@
 const Run = require("../models/Run");
+const PolarRun = require("../models/PolarRun");
 const { StatusCodes } = require("http-status-codes");
 const { BadRequestError, NotFoundError } = require("../errors");
 
 const getAllRuns = async (req, res) => {
   const runs = await Run.find({ userId: req.user.userId }).sort("createdAt");
-  res.status(StatusCodes.OK).json({ runs, count: runs.length });
+  const polarRuns = await PolarRun.find({ userId: req.user.userId }).sort(
+    "createdAt"
+  );
+  const allRuns = runs.concat(polarRuns);
+  res.status(StatusCodes.OK).json({ runs: allRuns });
 };
 
 const getRun = async (req, res) => {

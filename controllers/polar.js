@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 const { BadRequestError } = require("../errors");
 const Integration = require("../models/Integration");
+const PolarRun = require("../models/PolarRun");
 
 const getProfile = async (req, res) => {
   const id = req.query.id;
@@ -10,7 +11,7 @@ const getProfile = async (req, res) => {
 
   const integration = await Integration.findOne({ userId: id });
   if (!integration) {
-    return res.status(200).json({ msg: "User has no integrations." });
+    return res.status(204).end();
   }
 
   res.status(200).json({ profile: integration.profile });
@@ -31,14 +32,12 @@ const createProfile = async (req, res) => {
 
 const getAuthCode = async (req, res) => {
   const userId = req.query.state;
-  console.log(userId);
   const code = req.query.code;
   if (!code) {
     throw new BadRequestError("No authorization code provided.");
   }
 
-  const token = await getToken(code, userId); //8c7ae4df3a32db4721cd48a6d23ec0dd
-  console.log(token);
+  const token = await getToken(code, userId);
   // const user = await registerUser(token.access_token, req.user.userId);
   res.status(200).json({ token });
 };
@@ -65,7 +64,6 @@ const getToken = async (code, userId) => {
 };
 
 const registerUser = async (token, id) => {
-  console.log("User access token: " + token);
   const inputBody = {
     "member-id": id,
   };
@@ -81,7 +79,6 @@ const registerUser = async (token, id) => {
       body: inputBody,
       headers: headers,
     });
-    console.log(res);
     if (res.status !== 200) {
       return "Failed to create the user";
     }
@@ -92,79 +89,86 @@ const registerUser = async (token, id) => {
   }
 };
 
-// code d9fb91439bbef29d6b82ff0655caadc8
+const syncAccount = async (req, res) => {
+  const userId = req.body.userId;
+  // get user token and polar-user-id
+  const userIntegration = await Integration.findOne({ userId });
+  if (!userIntegration) {
+    res
+      .status(404)
+      .send({ msg: `Could not find integration data for the user ${userId}` });
+    return;
+  }
+  const token = userIntegration.token.access_token;
+  const memberId = userIntegration.profile["polar-user-id"];
 
-/*
-{
-    "polar-user-id": 43527991,
-    "member-id": "ah8293",
-    "registration-date": "2023-06-06T15:30:25.000Z",
-    "first-name": "Carlos",
-    "last-name": "Paiva",
-    "birthdate": "1990-05-17",
-    "gender": "MALE",
-    "weight": 76.0,
-    "height": 183.0,
-    "extra-info": []
-}
-
-// response from create transaction
-
-{
-    "transaction-id": 271055255,
-    "resource-uri": "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255"
-}
-
-// response from getting the transaction id
-
-{
-      "exercises": [
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013011",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013038",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013064",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013091",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013116",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013132",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013167",
-        "https://www.polaraccesslink.com/v3/users/43527991/exercise-transactions/271055255/exercises/296013190"
-    ]
-}
-
-// single exercise response
-
-{
-  {
-    "upload-time": "2023-05-16T18:10:02.000Z",
-    "id": 296013011,
-    "polar-user": "https://www.polaraccesslink.com/v3/users/43527991",
-    "transaction-id": 271055255,
-    "device": "Polar Vantage M",
-    "device-id": "500AF925",
-    "start-time": "2023-05-15T17:05:38",
-    "start-time-utc-offset": -240,
-    "duration": "PT44M5.252S",
-    "calories": 546,
-    "distance": 5995.0,
-    "heart-rate": {
-        "average": 142,
-        "maximum": 165
-    },
-    "training-load": 85.0,
-    "sport": "RUNNING",
-    "has-route": true,
-    "detailed-sport-info": "RUNNING",
-    "running-index": 46,
-    "training-load-pro": {
-        "cardio-load": 67.3257,
-        "cardio-load-interpretation": "MEDIUM",
-        "muscle-load": -1.0,
-        "muscle-load-interpretation": "NOT_AVAILABLE",
-        "perceived-load": 0.0,
-        "perceived-load-interpretation": "NOT_AVAILABLE",
-        "user-rpe": "UNKNOWN"
+  // start a transaction to check for available exercises
+  const transactionsResponse = await fetch(
+    `https://www.polaraccesslink.com/v3/users/${memberId}/exercise-transactions`,
+    {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     }
-}
-}
-*/
+  );
 
-module.exports = { getAuthCode, getProfile, createProfile };
+  if (transactionsResponse.status === 204) {
+    res.status(204).end();
+    return;
+  }
+  const transactions = await transactionsResponse.json();
+  const transactionId = transactions["transaction-id"];
+
+  // fetch the list of available exercises with the transaction-id received
+  const transactionListResponse = await fetch(
+    `https://www.polaraccesslink.com/v3/users/${memberId}/exercise-transactions/${transactionId}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }
+  );
+
+  const transactionList = await transactionListResponse.json();
+  const exercises = transactionList.exercises;
+
+  // fetch and save exercise data of all available exercises
+  const requests = [];
+  for (const link of exercises) {
+    requests.push(fetchAndSaveRuns(link, token, userId));
+  }
+  await Promise.all(requests);
+
+  // commit the transaction once all the data was saved
+  const commitTransactionResponse = await fetch(
+    `https://www.polaraccesslink.com/v3/users/${userId}/exercise-transactions/${transactionId}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+
+  res.status(200).end();
+};
+
+function fetchAndSaveRuns(link, token, userId) {
+  return fetch(link, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then((res) => {
+      if (res.status === 204) {
+        return; // no new data to be synced
+      }
+      return res.json();
+    })
+    .then((data) => {
+      const polarRun = PolarRun.mapResponseToModel(data);
+      polarRun.userId = userId;
+
+      return PolarRun.create(polarRun);
+    });
+}
+
+module.exports = { getAuthCode, getProfile, createProfile, syncAccount };

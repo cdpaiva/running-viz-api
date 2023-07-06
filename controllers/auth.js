@@ -29,16 +29,35 @@ const login = async (req, res) => {
   }
   const token = user.createJWT();
 
-  res.cookie("token", token, {
-    httpOnly: true,
-    sameSite: "None",
-    secure: true,
-    maxAge: 24 * 60 * 60 * 1000,
-  });
+  // res.cookie("token", token, {
+  //   httpOnly: true,
+  //   sameSite: "None",
+  //   secure: true,
+  //   maxAge: 24 * 60 * 60 * 1000,
+  // });
 
   res
     .status(StatusCodes.OK)
     .json({ user: { name: user.name, userId: user._id }, token });
 };
 
-module.exports = { register, login };
+const setNewPassword = async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    throw new BadRequestError("Missing information to reset password");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Invalid credentials" });
+  }
+
+  user.password = password;
+  await user.save();
+  return res.status(StatusCodes.OK).json({ message: "Password reset" });
+};
+
+module.exports = { register, login, setNewPassword };
