@@ -141,9 +141,10 @@ const syncAccount = async (req, res) => {
 
   // commit the transaction once all the data was saved
   await fetch(
-    `https://www.polaraccesslink.com/v3/users/${userId}/exercise-transactions/${transactionId}`,
+    `https://www.polaraccesslink.com/v3/users/${memberId}/exercise-transactions/${transactionId}`,
     {
       method: "PUT",
+      headers,
     }
   );
 
