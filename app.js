@@ -36,7 +36,7 @@ const polarRouter = require("./routes/polar.js");
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/runs", authMiddleware, runsRouter);
 app.use("/api/v1/docs", docsRouter);
-app.use("/api/v1/polar", authMiddleware, polarRouter);
+app.use("/api/v1/polar", polarRouter);
 
 app.use(notFoundMiddleware);
 app.use(errorHandlerMiddleware);

@@ -18,15 +18,22 @@ const getRun = async (req, res) => {
     params: { id: runId },
   } = req;
 
-  const run = await Run.findOne({ userId: userId, _id: runId });
-  if (!run) {
-    throw new NotFoundError(`No run with id ${runId} found`);
+  const polarRun = await PolarRun.findOne({ userId: userId, _id: runId });
+  if (!polarRun) {
+    const run = await Run.findOne({ userId: userId, _id: runId });
+    if (!run) {
+      throw new NotFoundError(`No run with id ${runId} found`);
+    }
+    res.status(StatusCodes.OK).json({ run });
+    return;
+  } else {
+    res.status(StatusCodes.OK).json({ run: polarRun });
   }
-  res.status(StatusCodes.OK).json({ run });
 };
 
 const createRun = async (req, res) => {
   req.body.userId = req.user.userId;
+  console.log(req.body);
   const run = await Run.create(req.body);
   res.status(StatusCodes.CREATED).json(run);
 };
@@ -42,16 +49,25 @@ const updateRun = async (req, res) => {
     throw new BadRequestError("Location, distance and date cannot be empty");
   }
 
-  const run = await Run.findOneAndUpdate(
+  const polarRun = await PolarRun.findOneAndUpdate(
     { userId: userId, _id: runId },
     req.body,
     { new: true, runValidators: true }
   );
 
-  if (!run) {
-    throw new NotFoundError(`No run with id ${runId} found`);
+  if (!polarRun) {
+    const run = await Run.findOneAndUpdate(
+      { userId: userId, _id: runId },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!run) {
+      throw new NotFoundError(`No run with id ${runId} found`);
+    }
+    res.status(StatusCodes.OK).json({ run });
+    return;
   }
-  res.status(StatusCodes.OK).json({ run });
+  res.status(StatusCodes.OK).json({ run: polarRun });
 };
 
 const deleteRun = async (req, res) => {
@@ -60,11 +76,17 @@ const deleteRun = async (req, res) => {
     params: { id: runId },
   } = req;
 
-  const run = await Run.findOneAndRemove({ _id: runId, userId: userId });
-  if (!run) {
-    throw new BadRequestError(`No run with id ${runId} found`);
-  }
+  const polarRun = await PolarRun.findOneAndRemove({
+    userId: userId,
+    _id: runId,
+  });
 
+  if (!polarRun) {
+    const run = await Run.findOneAndRemove({ userId: userId, _id: runId });
+    if (!run) {
+      throw new NotFoundError(`No run with id ${runId} found`);
+    }
+  }
   res.status(StatusCodes.ACCEPTED).send();
 };
 
